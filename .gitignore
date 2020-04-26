@@ -1,4 +1,3 @@
-﻿.idea
-AtC/bin/Debug/netcoreapp2.1/AtC.runtimeconfig.dev.json
-AtC/obj
-AtC.sln.DotSettings.user
+bin/
+.idea/
+obj/

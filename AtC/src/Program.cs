@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics.Tracing;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Extensions;
+using DSA;
 using static System.Math;
 using static Extensions.MathExtension;
 using static Extensions.ConsoleInputExtension;
@@ -17,49 +20,42 @@ class Solver
     public void Solve()
     {
         //Solve Code Here
-        int N = Cin, A = Cin - 1, B = Cin - 1, C = Cin - 1, D = Cin - 1;
-        string S = Cin;
-
-        char buf = (char) 0;
-        for (int i = A; i <= Max(C, D); i++)
+        int n = Cin;
+        var a = new long[n];
+        for (int i = 0; i < n; i++)
         {
-            if (S[i] == '#' && S[i] == buf)
-            {
-                Coutln("No");
-                return;
-            }
-
-            buf = S[i];
+            a[i] = Cin;
         }
 
-        if (C < D)
+        var oddSums = new long[n + 1];
+        var evenSums = new long[n + 1];
+        for (int i = 0; i < n; i++)
         {
-            Coutln("Yes");
+            oddSums[i + 1] = oddSums[i] + ((i & 1) == 1 ? a[i] : 0);
+            evenSums[i + 1] = evenSums[i] + ((i & 1) == 0 ? a[i] : 0);
         }
-        else
+
+        if ((n & 1) == 0)
         {
-            int cStart = B;
-            for (int i = B; i <= D; i++)
-            {
-                if (S[i] == '#' && i - cStart >= 3)
-                {
-                    Coutln("Yes");
-                    return;
-                }
-
-                if (S[i - 1] == '#' && S[i] == '.')
-                {
-                    cStart = i;
-                }
-            }
-
-            if (D - cStart >= 1) Coutln("Yes");
-            else Coutln("No");
+            Coutln(Max(oddSums[n], evenSums[n]));
+            return;
         }
+
+        long ans = oddSums[n];
+        for (int i = 0; i < n; i++)
+        {
+            ans = Max(ans, oddSums[i] + evenSums[n] - evenSums[i + 1]);
+            ans = Max(ans, evenSums[i] + oddSums[n] - oddSums[i + 1]);
+            if ((i & 1) == 0)
+                ans = Max(ans, evenSums[i] + evenSums[n] - evenSums[i + 1]);
+            else if (0 <= i - 1 && i + 2 <= n)
+                ans = Max(ans, evenSums[n] - evenSums[i + 2] + evenSums[i - 1] + a[i]);
+        }
+
+        Coutln(ans);
     }
-
-    //Other Functions Here
 }
+
 //Other Classes Here
 
 #if !DEBUG
@@ -73,159 +69,227 @@ class EntryPoint
 }
 #endif
 
-class PriorityQueue<T>
+namespace DSA
 {
-    private readonly List<Tuple<int, T>> _list = new List<Tuple<int, T>>();
-    public int Count { get; private set; } = 0;
-
-    public PriorityQueue()
+    public class PriorityQueue<T>
     {
-        _list.Add(null);
-        _list.Add(null);
-        _list.Add(null);
-    }
+        private readonly List<Tuple<int, T>> _list = new List<Tuple<int, T>>();
 
-    public void Push(T item, int priority)
-    {
-        var itemIndex = Count++;
-        _list[itemIndex] = Tuple.Create(priority, item);
-        while (_list.Count < Count + 2) _list.Add(null);
+        public int Count => _list.Count;
 
-        int parentIndex;
-        while ((parentIndex = GetParentIndex(itemIndex)) != -1 && priority > _list[parentIndex].Item1)
+        public PriorityQueue()
         {
-            Swap(itemIndex, parentIndex);
-            itemIndex = parentIndex;
         }
-    }
 
-    private int GetParentIndex(int index)
-    {
-        if (index == 0) return -1;
-        return ((index + 1) >> 1) - 1;
-    }
-
-    private Tuple<int, int> GetChildrenIndex(int index)
-    {
-        var item2 = (index + 1) << 1;
-        var item1 = item2 - 1;
-        return item2 >= _list.Count ? null : Tuple.Create(item1, item2);
-    }
-
-    public T Pop()
-    {
-        if (_list.Count <= 0 || _list[0] == null) throw new IndexOutOfRangeException();
-        var item = _list[0].Item2;
-        _list[0] = null;
-        Tuple<int, int> childrenIndex;
-        int index = 0;
-        while ((childrenIndex = GetChildrenIndex(index)) != null &&
-               (_list[childrenIndex.Item1] != null || _list[childrenIndex.Item2] != null))
+        public void Push(T item, int priority)
         {
-            if ((_list[childrenIndex.Item1]       != null && _list[childrenIndex.Item2] != null &&
-                 _list[childrenIndex.Item1].Item1 > _list[childrenIndex.Item2].Item1) ||
-                _list[childrenIndex.Item2] == null)
+            _list.Add(Tuple.Create(priority, item));
+
+            int itemIndex = Count - 1, parentIndex;
+            while ((parentIndex = GetParentIndex(itemIndex)) != -1 &&
+                   priority > _list[parentIndex].Item1)
             {
-                _list[index] = _list[childrenIndex.Item1];
-                _list[childrenIndex.Item1] = null;
-                index = childrenIndex.Item1;
-            }
-            else
-            {
-                two:
-                _list[index] = _list[childrenIndex.Item2];
-                _list[childrenIndex.Item2] = null;
-                index = childrenIndex.Item2;
+                Swap(itemIndex, parentIndex);
+                itemIndex = parentIndex;
             }
         }
 
-        Count--;
-        return item;
+        private int GetParentIndex(int index)
+        {
+            if (index == 0) return -1;
+            return ((index + 1) >> 1) - 1;
+        }
+
+        private Tuple<int, int> GetChildrenIndex(int index)
+        {
+            var item2 = (index + 1) << 1;
+            var item1 = item2 - 1;
+            return Tuple.Create(item1, item2);
+        }
+
+        public T Pop()
+        {
+            if (Count <= 0) throw new IndexOutOfRangeException();
+            var item = _list[0].Item2;
+            _list[0] = _list[Count - 1];
+            _list.RemoveAt(Count - 1);
+
+            int index = 0;
+            Tuple<int, int> childrenIndex = GetChildrenIndex(index);
+            while (childrenIndex.Item1 < Count || childrenIndex.Item2 < Count)
+            {
+                if (childrenIndex.Item2 >= Count || _list[childrenIndex.Item1].Item1 > _list[childrenIndex.Item2].Item1)
+                {
+                    if (_list[childrenIndex.Item1].Item1 <= _list[index].Item1) return item;
+
+                    Swap(index, childrenIndex.Item1);
+                    index = childrenIndex.Item1;
+                }
+                else
+                {
+                    if (_list[childrenIndex.Item2].Item1 <= _list[index].Item1) return item;
+                    Swap(index, childrenIndex.Item2);
+                    index = childrenIndex.Item2;
+                }
+
+                childrenIndex = GetChildrenIndex(index);
+            }
+
+            return item;
+        }
+
+        public T Peek()
+        {
+            return _list[0].Item2;
+        }
+
+        private void Swap(int index1, int index2)
+        {
+            var tmp = _list[index1];
+            _list[index1] = _list[index2];
+            _list[index2] = tmp;
+        }
     }
 
-    public T Peek()
+    public class UnionFind
     {
-        return _list[0].Item2;
+        private readonly int[] _array;
+
+        public UnionFind(int size)
+        {
+            _array = new int[size];
+            for (int i = 0; i < size; i++)
+            {
+                _array[i] = i;
+            }
+        }
+
+        public int GetRootNode(int n)
+        {
+            if (_array[n] == n) return n;
+            return _array[n] = GetRootNode(_array[n]);
+        }
+
+        public void UnionGroup(int a, int b)
+        {
+            var rootA = GetRootNode(a);
+            var rootB = GetRootNode(b);
+            if (rootA == rootB) return;
+            _array[rootA] = rootB;
+        }
+
+        public bool IsSameGroup(int a, int b) => GetRootNode(a) == GetRootNode(b);
+
+        public bool IsRoot(int n) => _array[n] == n;
     }
 
-    private void Swap(int index1, int index2)
+    public delegate T SegTreeCombiner<T>(T item1, T item2);
+
+    public class SegTree<T>
     {
-        var tmp = _list[index1];
-        _list[index1] = _list[index2];
-        _list[index2] = tmp;
+        private readonly T _defaultItem;
+        private readonly SegTreeCombiner<T> _func;
+        private T[] List;
+        private int size;
+
+        public SegTree(T[] list, T defaultItem, SegTreeCombiner<T> func)
+        {
+            _defaultItem = defaultItem;
+            _func = func;
+            size = 1;
+            while (size < list.Length) size <<= 1;
+            List = new T[2 * size - 1];
+            for (int i = 0; i < list.Length; i++) List[i + size - 1] = list[i];
+            for (int i = list.Length; i < size; i++) List[i + size - 1] = defaultItem;
+            for (int i = size - 1 - 1; i >= 0; i--)
+            {
+                List[i] = _func(List[2 * i + 1], List[2 * i + 2]);
+            }
+        }
+
+        public void Update(int index, T value)
+        {
+            index += size - 1;
+            List[index] = value;
+            while (index > 0)
+            {
+                index = (index - 1) >> 1;
+                List[index] = _func(List[2 * index + 1], List[2 * index + 2]);
+            }
+        }
+
+        public T Query(int a, int b)
+        {
+            return Query(a, b, 0, 0, size);
+        }
+
+        private T Query(int a, int b, int k, int l, int r)
+        {
+            if (r <= a || b <= l) return _defaultItem;
+            if (a <= l && r <= b) return List[k];
+            return _func(Query(a, b, k * 2 + 1, l, (l + r) >> 1), Query(a, b, k * 2 + 2, (l + r) >> 1, r));
+        }
+    }
+
+    public static class BinarySearch
+    {
+        public delegate bool Terms<T>(T i);
+
+        public static int UpperBound(int initLeft, int initRight, Terms<int> term)
+        {
+            //TODO:範囲内に条件を満たす区間が存在しない場合に対応する
+            int left = initLeft - 1, right = initRight;
+            while (right - left > 1)
+            {
+                int mid = (left + right) >> 1;
+                if (mid != initLeft - 1 && term(mid)) left = mid;
+                else right = mid;
+            }
+
+            return left;
+        }
+
+        public static long UpperBound(long initLeft, long initRight, Terms<long> term)
+        {
+            long left = initLeft - 1, right = initRight;
+            while (right - left > 1)
+            {
+                long mid = (left + right) >> 1;
+                if (mid != initLeft - 1 && term(mid)) left = mid;
+                else right = mid;
+            }
+
+            return left;
+        }
+
+        public static int LowerBound(int initLeft, int initRight, Terms<int> term)
+        {
+            int left = initLeft - 1, right = initRight;
+            while (right - left > 1)
+            {
+                int mid = (left + right) >> 1;
+                if (mid != initRight && term(mid)) right = mid;
+                else left = mid;
+            }
+
+            return right;
+        }
+
+        public static long LowerBound(long initLeft, long initRight, Terms<long> term)
+        {
+            long left = initLeft - 1, right = initRight;
+            while (right - left > 1)
+            {
+                long mid = (left + right) >> 1;
+                if (term(mid)) right = mid;
+                else left = mid;
+            }
+
+            return right;
+        }
     }
 }
 
-struct Rational
-{
-    private long _numerator;
-    private long _denominator;
-    public long Numerator => _numerator;
-    public long Denominator => _denominator;
-
-    public Rational(long numerator, long denominator)
-    {
-        var gcd = GCD(numerator, denominator);
-        _numerator = numerator     / gcd;
-        _denominator = denominator / gcd;
-    }
-
-    public static Rational operator +(Rational a, Rational b)
-    {
-        return new Rational(a._numerator * b._denominator + b._numerator * a._denominator,
-                            a._denominator * b._denominator);
-    }
-
-    public static Rational operator -(Rational a, Rational b)
-    {
-        return new Rational(a._numerator * b._denominator - b._numerator * a._denominator,
-                            a._denominator * b._denominator);
-    }
-
-    public static Rational operator *(Rational a, Rational b)
-    {
-        return new Rational(a._numerator * b._numerator, a._denominator * b._denominator);
-    }
-
-    public static Rational operator /(Rational a, Rational b)
-    {
-        return new Rational(a._numerator * b._denominator, a._denominator * b._numerator);
-    }
-
-    public static explicit operator Rational(int i)
-    {
-        return new Rational(i, 1);
-    }
-
-    public static explicit operator Rational(long l)
-    {
-        return new Rational(l, 1);
-    }
-
-    public static explicit operator Rational(double d)
-    {
-        long denominator = 1;
-        while (d % 1 != 0)
-        {
-            denominator *= 2;
-            d *= 2;
-        }
-
-        return new Rational((long) d, denominator);
-    }
-
-    public static explicit operator Rational(float f)
-    {
-        long denominator = 1;
-        while (f % 1 != 0)
-        {
-            denominator *= 2;
-            f *= 2;
-        }
-
-        return new Rational((long) f, denominator);
-    }
-}
 
 struct ModInt
 {
@@ -244,7 +308,7 @@ struct ModInt
         return m.Value;
     }
 
-    public static explicit operator ModInt(long l)
+    public static implicit operator ModInt(long l)
     {
         return new ModInt(l);
     }
@@ -302,38 +366,6 @@ static class ModIntMath
     }
 }
 
-class UnionFind
-{
-    private readonly int[] _array;
-
-    public UnionFind(int N)
-    {
-        _array = new int[N];
-        for (int i = 0; i < N; i++)
-        {
-            _array[i] = i;
-        }
-    }
-
-    public int GetRootNode(int n)
-    {
-        if (_array[n] == n) return n;
-        return _array[n] = GetRootNode(_array[n]);
-    }
-
-    public void UnionGroup(int a, int b)
-    {
-        var rootA = GetRootNode(a);
-        var rootB = GetRootNode(b);
-        if (rootA == rootB) return;
-        _array[rootA] = rootB;
-    }
-
-    public bool IsSameGroup(int a, int b) => GetRootNode(a) == GetRootNode(b);
-
-    public bool IsRoot(int n) => _array[n] == n;
-}
-
 
 namespace Extensions
 {
@@ -351,31 +383,41 @@ namespace Extensions
 
         public static implicit operator string(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0) Console.ReadLine().Split(' ').ForEach(val => _inputQueue.Enqueue(val));
+            if (_inputQueue.Count == 0)
+                Console.ReadLine().Split(' ')
+                    .ForEach(val => _inputQueue.Enqueue(val));
             return _inputQueue.Dequeue();
         }
 
         public static implicit operator int(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0) Console.ReadLine().Split(' ').ForEach(val => _inputQueue.Enqueue(val));
+            if (_inputQueue.Count == 0)
+                Console.ReadLine().Split(' ')
+                    .ForEach(val => _inputQueue.Enqueue(val));
             return int.Parse(_inputQueue.Dequeue());
         }
 
         public static implicit operator long(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0) Console.ReadLine().Split(' ').ForEach(val => _inputQueue.Enqueue(val));
+            if (_inputQueue.Count == 0)
+                Console.ReadLine().Split(' ')
+                    .ForEach(val => _inputQueue.Enqueue(val));
             return long.Parse(_inputQueue.Dequeue());
         }
 
         public static implicit operator float(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0) Console.ReadLine().Split(' ').ForEach(val => _inputQueue.Enqueue(val));
+            if (_inputQueue.Count == 0)
+                Console.ReadLine().Split(' ')
+                    .ForEach(val => _inputQueue.Enqueue(val));
             return float.Parse(_inputQueue.Dequeue());
         }
 
         public static implicit operator double(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0) Console.ReadLine().Split(' ').ForEach(val => _inputQueue.Enqueue(val));
+            if (_inputQueue.Count == 0)
+                Console.ReadLine().Split(' ')
+                    .ForEach(val => _inputQueue.Enqueue(val));
             return double.Parse(_inputQueue.Dequeue());
         }
     }
@@ -388,6 +430,7 @@ namespace Extensions
         {
             _builder.Append(o);
         }
+
 
         public static void CoutF(object o)
         {
@@ -440,6 +483,7 @@ namespace Extensions
         {
             int a = Math.Max(num1, num2);
             int b = Math.Min(num1, num2);
+            if (b == 0) return a;
             int mod;
             while ((mod = a % b) != 0)
             {
@@ -454,6 +498,7 @@ namespace Extensions
         {
             long a = Math.Max(num1, num2);
             long b = Math.Min(num1, num2);
+            if (b == 0) return a;
             long mod;
             while ((mod = a % b) != 0)
             {
