@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Linq;
-using System.Net.NetworkInformation;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.X86;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -19,44 +22,12 @@ class Solver
 {
     public void Solve()
     {
-        //Solve Code Here
-        int n = Cin;
-        var a = new long[n];
-        for (int i = 0; i < n; i++)
+        checked
         {
-            a[i] = Cin;
+            //Solve Code Here
         }
-
-        var oddSums = new long[n + 1];
-        var evenSums = new long[n + 1];
-        for (int i = 0; i < n; i++)
-        {
-            oddSums[i + 1] = oddSums[i] + ((i & 1) == 1 ? a[i] : 0);
-            evenSums[i + 1] = evenSums[i] + ((i & 1) == 0 ? a[i] : 0);
-        }
-
-        if ((n & 1) == 0)
-        {
-            Coutln(Max(oddSums[n], evenSums[n]));
-            return;
-        }
-
-        long ans = oddSums[n];
-        for (int i = 0; i < n; i++)
-        {
-            ans = Max(ans, oddSums[i] + evenSums[n] - evenSums[i + 1]);
-            ans = Max(ans, evenSums[i] + oddSums[n] - oddSums[i + 1]);
-            if ((i & 1) == 0)
-                ans = Max(ans, evenSums[i] + evenSums[n] - evenSums[i + 1]);
-            else if (0 <= i - 1 && i + 2 <= n)
-                ans = Max(ans, evenSums[n] - evenSums[i + 2] + evenSums[i - 1] + a[i]);
-        }
-
-        Coutln(ans);
     }
 }
-
-//Other Classes Here
 
 #if !DEBUG
 class EntryPoint
@@ -67,6 +38,7 @@ class EntryPoint
         Flush();
     }
 }
+
 #endif
 
 namespace DSA
@@ -76,10 +48,6 @@ namespace DSA
         private readonly List<Tuple<int, T>> _list = new List<Tuple<int, T>>();
 
         public int Count => _list.Count;
-
-        public PriorityQueue()
-        {
-        }
 
         public void Push(T item, int priority)
         {
@@ -151,23 +119,23 @@ namespace DSA
         }
     }
 
-    public class UnionFind
+    public class UnionFind<T>
     {
-        private readonly int[] _array;
+        private readonly (int, int)[] _array; //index,count
 
         public UnionFind(int size)
         {
-            _array = new int[size];
+            _array = new (int, int)[size];
             for (int i = 0; i < size; i++)
             {
-                _array[i] = i;
+                _array[i] = (i, 1);
             }
         }
 
-        public int GetRootNode(int n)
+        public (int index, int count) GetRootNode(int n)
         {
-            if (_array[n] == n) return n;
-            return _array[n] = GetRootNode(_array[n]);
+            if (_array[n].Item1 == n) return _array[n];
+            return _array[n] = GetRootNode(_array[n].Item1);
         }
 
         public void UnionGroup(int a, int b)
@@ -175,12 +143,13 @@ namespace DSA
             var rootA = GetRootNode(a);
             var rootB = GetRootNode(b);
             if (rootA == rootB) return;
-            _array[rootA] = rootB;
+            _array[rootB.Item1].Item2 += rootA.Item2;
+            _array[rootA.Item1] = rootB;
         }
 
-        public bool IsSameGroup(int a, int b) => GetRootNode(a) == GetRootNode(b);
+        public bool IsSameGroup(int a, int b) => GetRootNode(a).Item1 == GetRootNode(b).Item1;
 
-        public bool IsRoot(int n) => _array[n] == n;
+        public bool IsRoot(int n) => _array[n].Item1 == n;
     }
 
     public delegate T SegTreeCombiner<T>(T item1, T item2);
@@ -205,6 +174,11 @@ namespace DSA
             {
                 List[i] = _func(List[2 * i + 1], List[2 * i + 2]);
             }
+        }
+
+        public T Get(int index)
+        {
+            return List[index + size - 1];
         }
 
         public void Update(int index, T value)
@@ -237,7 +211,6 @@ namespace DSA
 
         public static int UpperBound(int initLeft, int initRight, Terms<int> term)
         {
-            //TODO:範囲内に条件を満たす区間が存在しない場合に対応する
             int left = initLeft - 1, right = initRight;
             while (right - left > 1)
             {
@@ -323,6 +296,11 @@ struct ModInt
         return new ModInt(a.Value - b.Value);
     }
 
+    public static ModInt operator -(ModInt a)
+    {
+        return new ModInt(-a.Value);
+    }
+
     public static ModInt operator *(ModInt a, ModInt b)
     {
         return new ModInt(a.Value * b.Value);
@@ -362,7 +340,9 @@ static class ModIntMath
 
     public static ModInt Inverse(this ModInt m)
     {
-        return m.Pow((ModInt) (ModInt.Mod - 2));
+        var gcd = ExtGCD(m, ModInt.Mod, out var x, out _);
+        if (gcd != 1) throw new InvalidOperationException("入力はModと互いに素である必要があります");
+        return x;
     }
 }
 
@@ -377,48 +357,135 @@ namespace Extensions
 
         private static readonly Queue<string> _inputQueue = new Queue<string>();
 
-        private ConsoleInputExtension()
+        private static void FillQueue(int count = 1)
         {
+            while (_inputQueue.Count < count)
+                Console.ReadLine().Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .ForEach(val => _inputQueue.Enqueue(val));
         }
 
         public static implicit operator string(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0)
-                Console.ReadLine().Split(' ')
-                    .ForEach(val => _inputQueue.Enqueue(val));
+            FillQueue();
             return _inputQueue.Dequeue();
+        }
+
+        public static implicit operator char[](ConsoleInputExtension _)
+        {
+            FillQueue();
+            return _inputQueue.Dequeue().ToCharArray();
         }
 
         public static implicit operator int(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0)
-                Console.ReadLine().Split(' ')
-                    .ForEach(val => _inputQueue.Enqueue(val));
+            FillQueue();
             return int.Parse(_inputQueue.Dequeue());
+        }
+
+        public static implicit operator uint(ConsoleInputExtension _)
+        {
+            FillQueue();
+            return uint.Parse(_inputQueue.Dequeue());
         }
 
         public static implicit operator long(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0)
-                Console.ReadLine().Split(' ')
-                    .ForEach(val => _inputQueue.Enqueue(val));
+            FillQueue();
             return long.Parse(_inputQueue.Dequeue());
+        }
+
+        public static implicit operator ulong(ConsoleInputExtension _)
+        {
+            FillQueue();
+            return ulong.Parse(_inputQueue.Dequeue());
         }
 
         public static implicit operator float(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0)
-                Console.ReadLine().Split(' ')
-                    .ForEach(val => _inputQueue.Enqueue(val));
+            FillQueue();
             return float.Parse(_inputQueue.Dequeue());
         }
 
         public static implicit operator double(ConsoleInputExtension _)
         {
-            if (_inputQueue.Count == 0)
-                Console.ReadLine().Split(' ')
-                    .ForEach(val => _inputQueue.Enqueue(val));
+            FillQueue();
             return double.Parse(_inputQueue.Dequeue());
+        }
+
+        public ArrayInputBuffer this[int n] => new ArrayInputBuffer(n);
+
+        public class ArrayInputBuffer
+        {
+            private int _length;
+
+            public ArrayInputBuffer(int length)
+            {
+                _length = length;
+            }
+
+            public static implicit operator string[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new string[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = _inputQueue.Dequeue();
+                return array;
+            }
+
+            public static implicit operator char[][](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new char[][self._length];
+                for (int i = 0; i < self._length; i++) array[i] = _inputQueue.Dequeue().ToCharArray();
+                return array;
+            }
+
+            public static implicit operator int[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new int[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = int.Parse(_inputQueue.Dequeue());
+                return array;
+            }
+
+            public static implicit operator uint[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new uint[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = uint.Parse(_inputQueue.Dequeue());
+                return array;
+            }
+
+            public static implicit operator long[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new long[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = long.Parse(_inputQueue.Dequeue());
+                return array;
+            }
+
+            public static implicit operator ulong[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new ulong[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = ulong.Parse(_inputQueue.Dequeue());
+                return array;
+            }
+
+            public static implicit operator float[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new float[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = float.Parse(_inputQueue.Dequeue());
+                return array;
+            }
+
+            public static implicit operator double[](ArrayInputBuffer self)
+            {
+                FillQueue(self._length);
+                var array = new double[self._length];
+                for (int i = 0; i < self._length; i++) array[i] = double.Parse(_inputQueue.Dequeue());
+                return array;
+            }
         }
     }
 
@@ -426,33 +493,60 @@ namespace Extensions
     {
         private static StringBuilder _builder = new StringBuilder();
 
-        public static void Cout(object o)
+        public static void Cout<T>(params T[] o)
         {
-            _builder.Append(o);
+            for (var i = 0; i < o.Length; i++)
+            {
+                _builder.Append(o[i]);
+                if (i < o.Length - 1) _builder.Append(' ');
+            }
         }
 
-
-        public static void CoutF(object o)
+        public static void Cout<T>(List<T> o)
         {
-            _builder.Append(o);
+            var enumerator = o.GetEnumerator();
+            if (!enumerator.MoveNext()) return;
+            while (true)
+            {
+                _builder.Append(enumerator.Current);
+                if (enumerator.MoveNext()) _builder.Append(' ');
+                else break;
+            }
+        }
+
+        public static void CoutF<T>(params T[] o)
+        {
+            Cout(o);
             Flush();
         }
 
-        public static void Coutln(object o)
+        public static void CoutF<T>(List<T> o)
         {
-            _builder.Append(o);
+            Cout(o);
+            Flush();
+        }
+
+        public static void Coutln<T>(params T[] o)
+        {
+            Cout(o);
             _builder.Append('\n');
         }
 
-        public static void Coutln()
+        public static void Coutln<T>(List<T> o)
         {
+            Cout(o);
             _builder.Append('\n');
         }
 
-        public static void CoutlnF(object o)
+        public static void CoutlnF<T>(params T[] o)
         {
-            _builder.Append(o);
-            _builder.Append('\n');
+            Coutln(o);
+            Flush();
+        }
+
+        public static void CoutlnF<T>(List<T> o)
+        {
+            Coutln(o);
             Flush();
         }
 
@@ -465,7 +559,12 @@ namespace Extensions
 
     public static class MathExtension
     {
-        //最小公倍数
+        /// <summary>
+        /// 最小公倍数
+        /// </summary>
+        /// <param name="num1"></param>
+        /// <param name="num2"></param>
+        /// <returns></returns>
         public static int LCM(int num1, int num2)
         {
             var gcd = GCD(num1, num2);
@@ -478,7 +577,12 @@ namespace Extensions
             return num1 * (num2 / gcd);
         }
 
-        //最大公約数
+        /// <summary>
+        /// 最大公約数
+        /// </summary>
+        /// <param name="num1"></param>
+        /// <param name="num2"></param>
+        /// <returns></returns>
         public static int GCD(int num1, int num2)
         {
             int a = Math.Max(num1, num2);
@@ -507,6 +611,99 @@ namespace Extensions
             }
 
             return b;
+        }
+
+        /// <summary>
+        /// solve ax+by=GCD(a,b)
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <returns>gcd(a,b)</returns>
+        public static int ExtGCD(int a, int b, out int x, out int y)
+        {
+            x = y = 0;
+            if (b == 0)
+            {
+                x = 1;
+                y = 0;
+                return a;
+            }
+
+            var d = ExtGCD(b, a % b, out y, out x);
+            y -= a / b * x;
+            return d;
+        }
+
+        public static long ExtGCD(long a, long b, out long x, out long y)
+        {
+            x = y = 0;
+            if (b == 0)
+            {
+                x = 1;
+                y = 0;
+                return a;
+            }
+
+            var d = ExtGCD(b, a % b, out y, out x);
+            y -= a / b * x;
+            return d;
+        }
+
+        /// <summary>
+        /// 素因数分解
+        /// </summary>
+        /// <param name="num"></param>
+        /// <returns></returns>
+        public static List<(int prime, int count)> PrimeFactorization(int num)
+        {
+            var n = num;
+            var primes = new List<(int, int)>();
+            for (int i = 2; i * i < num; i++)
+            {
+                var k = 0;
+                while (n % i == 0)
+                {
+                    n /= i;
+                    k++;
+                }
+
+                if (k == 0) continue;
+                primes.Add((i, k));
+            }
+
+            if (n > 1)
+            {
+                primes.Add((n, 1));
+            }
+
+            return primes;
+        }
+
+        public static List<(int prime, int count)> PrimeFactorization(long num)
+        {
+            var n = num;
+            var primes = new List<(int, int)>();
+            for (long i = 2; i * i < num; i++)
+            {
+                var k = 0;
+                while (n % i == 0)
+                {
+                    n /= i;
+                    k++;
+                }
+
+                if (k == 0) continue;
+                primes.Add(((int) i, k));
+            }
+
+            if (n > 1)
+            {
+                primes.Add(((int) n, 1));
+            }
+
+            return primes;
         }
     }
 
