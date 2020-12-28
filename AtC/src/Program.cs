@@ -431,14 +431,6 @@ namespace Extensions
                 return array;
             }
 
-            public static implicit operator char[][](ArrayInputBuffer self)
-            {
-                FillQueue(self._length);
-                var array = new char[][self._length];
-                for (int i = 0; i < self._length; i++) array[i] = _inputQueue.Dequeue().ToCharArray();
-                return array;
-            }
-
             public static implicit operator int[](ArrayInputBuffer self)
             {
                 FillQueue(self._length);

@@ -89,12 +89,12 @@ public class Test
     private static IList<TestCase> SetUpTestCase(string url)
     {
         var fileName = Regex.Replace(url, "[\\\\/:*?\"<>|]", "@") + ".json";
-        Console.WriteLine("TestCase:"                             + fileName);
+        Console.WriteLine("TestCase:" + fileName);
 
         IList<TestCase> testCases;
         while (!File.Exists(fileName) || (testCases = JsonConvert.DeserializeObject<IList<TestCase>>(
-                   new StreamReader(File.OpenRead(fileName)).ReadToEnd()
-               )) == null)
+            new StreamReader(File.OpenRead(fileName)).ReadToEnd()
+        )) == null)
             CreateTestCaseFile(url, fileName);
         return testCases;
     }
@@ -116,13 +116,13 @@ public class Test
 
             var testCases = new List<TestCase>();
             var allH3 = doc.QuerySelectorAll("h3")
-                           .Where(val => Regex.IsMatch(val.InnerHtml, "[入出]力例 ?\\d+"))
-                           .Select(val => (val.InnerHtml[0] == '入' ? 0 : 1,
-                                           int.Parse(Regex.Match(val.InnerHtml, "\\d+").Value),
-                                           val.ParentElement.QuerySelector("pre").InnerHtml))
-                           .OrderBy(val => val.Item2)
-                           .ThenBy(val => val.Item1)
-                           .ToArray();
+                .Where(val => Regex.IsMatch(val.InnerHtml, "[入出]力例 ?\\d+"))
+                .Select(val => (val.InnerHtml[0] == '入' ? 0 : 1,
+                    int.Parse(Regex.Match(val.InnerHtml, "\\d+").Value),
+                    val.ParentElement.QuerySelector("pre").InnerHtml))
+                .OrderBy(val => val.Item2)
+                .ThenBy(val => val.Item1)
+                .ToArray();
 
             for (int i = 0; i * 2 < allH3.Length; i++)
             {
